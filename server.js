@@ -1,20 +1,78 @@
-const express = require('express');
-const cors = require('cors');
-const multer = require('multer');
+// Select buttons and elements
+const videoButton = document.getElementById('videoButton');
+const audioButton = document.getElementById('audioButton');
+const videoContainer = document.getElementById('videoContainer');
+const audioContainer = document.getElementById('audioContainer');
+const videoElement = document.getElementById('video');
+const stopVideoButton = document.getElementById('stopVideo');
+const stopAudioButton = document.getElementById('stopAudio');
+const statusMessage = document.getElementById('status');
 
-const app = express();
-app.use(cors());
-app.use(express.json());
+// MediaRecorder variables
+let mediaRecorder;
+let recordedChunks = [];
 
-const storage = multer.memoryStorage();
-const upload = multer({ storage: storage });
+// Video recording with blur effect
+videoButton.addEventListener('click', async () => {
+    recordedChunks = [];
+    videoContainer.classList.remove('hidden');
+    audioContainer.classList.add('hidden');
+    statusMessage.textContent = "Recording blurred video...";
 
-app.post('/upload', upload.single('file'), (req, res) => {
-    if (!req.file) {
-        return res.status(400).json({ error: 'No file uploaded' });
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        videoElement.srcObject = stream;
+        videoElement.style.filter = "blur(10px)";
+
+        mediaRecorder = new MediaRecorder(stream);
+        mediaRecorder.ondataavailable = event => recordedChunks.push(event.data);
+        mediaRecorder.start();
+
+        stopVideoButton.onclick = () => {
+            mediaRecorder.stop();
+            stream.getTracks().forEach(track => track.stop());
+            saveRecording("video");
+        };
+    } catch (error) {
+        console.error("Error accessing video camera:", error);
+        statusMessage.textContent = "Error: Video access denied.";
     }
-    res.json({ message: 'File uploaded successfully!' });
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// Audio recording only
+audioButton.addEventListener('click', async () => {
+    recordedChunks = [];
+    audioContainer.classList.remove('hidden');
+    videoContainer.classList.add('hidden');
+    statusMessage.textContent = "Recording audio...";
+
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        mediaRecorder.ondataavailable = event => recordedChunks.push(event.data);
+        mediaRecorder.start();
+
+        stopAudioButton.onclick = () => {
+            mediaRecorder.stop();
+            stream.getTracks().forEach(track => track.stop());
+            saveRecording("audio");
+        };
+    } catch (error) {
+        console.error("Error accessing microphone:", error);
+        statusMessage.textContent = "Error: Microphone access denied.";
+    }
+});
+
+// Save recording to file
+function saveRecording(type) {
+    const blob = new Blob(recordedChunks, { type: type === "video" ? 'video/mp4' : 'audio/mp3' });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${type}_submission.${type === "video" ? 'mp4' : 'mp3'}`;
+    a.click();
+
+    statusMessage.textContent = "Recording saved successfully!";
+}
+
